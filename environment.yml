@@ -1,0 +1,17 @@
+name: ml-ds
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - xarray
+  - netcdf4
+  - pytorch
+  - torchvision
+  - pytorch-lightning
+  - notebook
+  - ipykernel
+  - pip
