@@ -13,23 +13,42 @@ class ERA5dataset(Dataset):
             target_data:list[str],
             target_vars:list[str],
             static_data:str=None,
-            static_vars:list[str]=None
+            static_vars:list[str]=None,
+            mean_sd:dict[str,float]=None,
             ):
         super().__init__()
 
+        # Initialize sub-datasets (one per file pair)
         datasets = []
         for X, Y in zip(input_data,target_data):
              datasets.append(DataUnit(X,input_vars,Y,target_vars))
         self.dataset = ConcatDataset(datasets)
 
-        if static_data:
-            self.static_data = xr.open_dataset(static_data)
-            if isinstance(static_vars,str): static_vars = [static_vars]
-            missing = [v for v in static_vars if v not in self.static_data.data_vars]
-            if missing:
-                raise ValueError(f"Variable not in dataset: {missing}")
-
+        # Variables
+        self.input_vars = input_vars
+        self.target_vars = target_vars
         self.static_vars = static_vars
+
+        # Files
+        self.input_data = input_data
+        self.target_data = target_data
+
+        # Static data
+        if self.static_vars:
+            self.static_data = xr.open_dataset(static_data)
+
+        # Mean/sd for each variable
+        if mean_sd is None:
+            self.mean_sd = self._compute_mean_sd()
+        else:
+            self.mean_sd = mean_sd
+        
+        # Get mean and sd for input and target, and reshape to match dimensions
+        inp_vars = input_vars + static_vars if static_vars else input_vars
+        self.input_means = torch.tensor([self.mean_sd[var][0] for var in inp_vars],
+                                        dtype=torch.float32).view(-1, 1, 1)
+        self.input_sds = torch.tensor([self.mean_sd[var][1] for var in inp_vars],
+                                      dtype=torch.float32).view(-1, 1, 1)
 
     def __len__(self):
         return len(self.dataset)
@@ -43,8 +62,51 @@ class ERA5dataset(Dataset):
                 ), dtype=torch.float32)        
             x = torch.cat([x,static],dim=0)
 
+        x = (x - self.input_means) / self.input_sds
+
         return x,y
 
+    def _compute_mean_sd(self):
+        sums = {}
+        sums_sq = {}
+        counts = {}
+
+        # Initialize dicts for all variables to normalize
+        vars_to_compute = self.input_vars + (self.static_vars if self.static_vars else [])
+        for var in vars_to_compute:
+            sums[var] = 0.0
+            sums_sq[var] = 0.0
+            counts[var] = 0
+
+        # Compute mean/std for dynamic input variables
+        for file_path in self.input_data:
+            print(f"Computing mean/std from {file_path}...")
+            with xr.open_dataset(file_path) as ds:
+                for var in self.input_vars:
+                    arr = ds[var].values
+                    sums[var]     += arr.sum()
+                    sums_sq[var]  += (arr**2).sum()
+                    counts[var]   += arr.size
+
+        # Compute for static variables
+        if self.static_vars:
+            for var in self.static_vars:
+                arr = self.static_data[var].values
+                sums[var]    += arr.sum()
+                sums_sq[var] += (arr**2).sum()
+                counts[var]  += arr.size
+
+        # Finalize means/stds
+        mean_sd = {}
+        for var in vars_to_compute:
+            mean = sums[var] / counts[var]
+            sd = np.sqrt((sums_sq[var] / counts[var]) - mean**2)
+            mean_sd[var] = (mean, sd)
+
+        return mean_sd
+    
+
+    
 class DataUnit(Dataset):
     def __init__(
             self,

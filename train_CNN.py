@@ -33,10 +33,12 @@ train_data = ERA5dataset(train_input, input_vars,
                          static_data, static_vars)
 val_data   = ERA5dataset(val_input,   input_vars, 
                          val_target,  target_vars, 
-                         static_data, static_vars)
+                         static_data, static_vars,
+                         train_data.mean_sd)
 test_data  = ERA5dataset(test_input,  input_vars, 
                          test_target, target_vars, 
-                         static_data, static_vars)
+                         static_data, static_vars,
+                         train_data.mean_sd)
 
 print(f"Training data: {len(train_data)} samples.")
 print(f"Validation data: {len(val_data)} samples.")
