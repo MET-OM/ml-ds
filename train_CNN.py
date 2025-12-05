@@ -15,8 +15,8 @@ target_vars = ["u10","v10"]
 # Selecting data. Here, we just use one file (year) each for train, val and test.
 dir_input = "data/"
 dir_target = "data/"
-input_files = [dir_input+f"ERA5_{y}.nc" for y in [1940,1941,1942]]
-target_files = [dir_target+f"ERA5_{y}_reinterp.nc" for y in [1940,1941,1942]]
+input_files = [dir_target+f"ERA5_{y}_reinterp.nc" for y in [1940,1941,1942]]
+target_files = [dir_input+f"ERA5_{y}.nc" for y in [1940,1941,1942]]
 static_data = "data/GEBCO_gridded.nc"
 
 train_input = [input_files[0]]
