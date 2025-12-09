@@ -5,6 +5,9 @@ from dataset import ERA5dataset
 from network import LightningModule
 from models import ConvResNet
 
+import torch
+print(f"Is CUDA: {torch.cuda.is_available()}")
+
 batch_size = 16
 max_epochs = 5
 
