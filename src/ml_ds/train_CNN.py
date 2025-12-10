@@ -9,7 +9,7 @@ from ml_ds.network import LightningModule
 print(f"Is CUDA: {torch.cuda.is_available()}")
 
 if __name__ == "__main__":
-    batch_size = 16
+    batch_size = 20
     max_epochs = 5
 
     static_vars = ["land_mask"]
@@ -51,14 +51,14 @@ if __name__ == "__main__":
     # Initialize model
     model = ConvResNet(in_channels=len(input_vars) + len(static_vars),
                        out_channels=len(target_vars),
-                       n_filters=8,
-                       n_blocks=2,
+                       n_filters=40,
+                       n_blocks=8,
                        normalization="batch",
                        dropout_rate=0.1)
     print(model)
 
     # Initialize pytorch-lightning module and trainer.
-    network = LightningModule(model,train_data,val_data,test_data,batch_size=batch_size,num_workers=4)
+    network = LightningModule(model,train_data,val_data,test_data,batch_size=batch_size,num_workers=8)
     trainer = Trainer(profiler="simple",max_epochs=max_epochs)
     trainer.fit(network)
 
@@ -85,6 +85,6 @@ if __name__ == "__main__":
     ds_y = to_xarray(y,target_vars)
     ds_yh = to_xarray(yh,target_vars)
 
-    ds_x.to_netcdf("test_input.nc")
-    ds_y.to_netcdf("test_target.nc")
-    ds_yh.to_netcdf("test_prediction.nc")
+    ds_x.to_netcdf("example/test_input.nc")
+    ds_y.to_netcdf("example/test_target.nc")
+    ds_yh.to_netcdf("example/test_prediction.nc")
