@@ -1,7 +1,8 @@
+import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
+
 
 class LightningModule(pl.LightningModule):
     def __init__(
@@ -13,7 +14,7 @@ class LightningModule(pl.LightningModule):
         lr: float = 1e-3,
         batch_size: int = 16,
         num_workers: int = 4,
-        criterion=None
+        criterion=None,
     ):
         """
         Generic LightningModule for training any PyTorch model.
@@ -37,7 +38,7 @@ class LightningModule(pl.LightningModule):
         criterion : torch.nn.modules.loss._Loss, optional
             Loss function to optimize (default is nn.MSELoss()).
         """
-        
+
         super().__init__()
         self.model = model
         self.lr = lr
@@ -83,6 +84,7 @@ class LightningModule(pl.LightningModule):
             num_workers=self.num_workers,
             pin_memory=True,
         )
+
     def predict_dataloader(self):
         return self.test_dataloader()
 
