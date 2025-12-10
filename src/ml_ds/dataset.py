@@ -44,8 +44,12 @@ class ERA5dataset(Dataset):
 
         # Get mean and sd for input and target, and reshape to match dimensions
         inp_vars = input_vars + static_vars if static_vars else input_vars
-        self.input_means = torch.tensor([self.mean_sd[var][0] for var in inp_vars], dtype=torch.float32).view(-1, 1, 1)
-        self.input_sds = torch.tensor([self.mean_sd[var][1] for var in inp_vars], dtype=torch.float32).view(-1, 1, 1)
+        self.input_means = torch.tensor(
+            [self.mean_sd[var][0] for var in inp_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+        self.input_sds = torch.tensor(
+            [self.mean_sd[var][1] for var in inp_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
 
     def __len__(self):
         return len(self.dataset)
@@ -54,7 +58,10 @@ class ERA5dataset(Dataset):
         x, y = self.dataset[index]
 
         if self.static_vars:
-            static = torch.tensor(np.array([self.static_data[v].values for v in self.static_vars]), dtype=torch.float32)
+            static = torch.tensor(
+                np.array([self.static_data[v].values for v in self.static_vars]),
+                dtype=torch.float32,
+            )
             x = torch.cat([x, static], dim=0)
 
         x = (x - self.input_means) / self.input_sds
