@@ -2,12 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # ----------------------------------------
 # Multiscale convolution block
 # ----------------------------------------
 class MultiScaleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_sizes=[3,5,7], dilations=[1,2,3],
-                 use_batchnorm=False, dropout=0.0):
+    def __init__(
+        self, in_channels, out_channels, kernel_sizes=[3, 5, 7], dilations=[1, 2, 3], use_batchnorm=False, dropout=0.0
+    ):
         super().__init__()
         self.branches = nn.ModuleList()
         for k in kernel_sizes:
@@ -54,16 +56,23 @@ class ResBlock(nn.Module):
 # Full ConvResNet with multiscale frontend
 # ----------------------------------------
 class MultiScaleConvResNet(nn.Module):
-    def __init__(self, in_channels, out_channels, base_channels=64, num_resblocks=4,
-                 kernel_sizes=[3,5,7], dilations=[1,2,3], use_batchnorm=False, dropout=0.0):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        base_channels=64,
+        num_resblocks=4,
+        kernel_sizes=[3, 5, 7],
+        dilations=[1, 2, 3],
+        use_batchnorm=False,
+        dropout=0.0,
+    ):
         super().__init__()
         self.multiscale = MultiScaleConv(
-            in_channels, base_channels, kernel_sizes, dilations,
-            use_batchnorm=use_batchnorm, dropout=dropout
+            in_channels, base_channels, kernel_sizes, dilations, use_batchnorm=use_batchnorm, dropout=dropout
         )
         self.resblocks = nn.Sequential(
-            *[ResBlock(base_channels, use_batchnorm=use_batchnorm, dropout=dropout)
-              for _ in range(num_resblocks)]
+            *[ResBlock(base_channels, use_batchnorm=use_batchnorm, dropout=dropout) for _ in range(num_resblocks)]
         )
         self.head = nn.Conv2d(base_channels, out_channels, 3, padding=1)  # output same resolution
 
@@ -79,9 +88,14 @@ class MultiScaleConvResNet(nn.Module):
 # ----------------------------------------
 if __name__ == "__main__":
     model = MultiScaleConvResNet(
-        in_channels=10, out_channels=1, base_channels=64, num_resblocks=6,
-        kernel_sizes=[3,5], dilations=[1,2,3],
-        use_batchnorm=True, dropout=0.1
+        in_channels=10,
+        out_channels=1,
+        base_channels=64,
+        num_resblocks=6,
+        kernel_sizes=[3, 5],
+        dilations=[1, 2, 3],
+        use_batchnorm=True,
+        dropout=0.1,
     )
     x = torch.randn(2, 10, 32, 32)  # batch, channels, height, width
     y = model(x)

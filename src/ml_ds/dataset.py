@@ -1,27 +1,26 @@
-from torch.utils.data import Dataset, ConcatDataset
-import xarray as xr
 import numpy as np
 import torch
-
+import xarray as xr
+from torch.utils.data import ConcatDataset, Dataset
 
 
 class ERA5dataset(Dataset):
     def __init__(
-            self,
-            input_data:list[str],
-            input_vars:list[str],
-            target_data:list[str],
-            target_vars:list[str],
-            static_data:str=None,
-            static_vars:list[str]=None,
-            mean_sd:dict[str,float]=None,
-            ):
+        self,
+        input_data: list[str],
+        input_vars: list[str],
+        target_data: list[str],
+        target_vars: list[str],
+        static_data: str = None,
+        static_vars: list[str] = None,
+        mean_sd: dict[str, float] = None,
+    ):
         super().__init__()
 
         # Initialize sub-datasets (one per file pair)
         datasets = []
-        for X, Y in zip(input_data,target_data):
-             datasets.append(DataUnit(X,input_vars,Y,target_vars))
+        for X, Y in zip(input_data, target_data):
+            datasets.append(DataUnit(X, input_vars, Y, target_vars))
         self.dataset = ConcatDataset(datasets)
 
         # Variables
@@ -42,29 +41,32 @@ class ERA5dataset(Dataset):
             self.mean_sd = self._compute_mean_sd()
         else:
             self.mean_sd = mean_sd
-        
+
         # Get mean and sd for input and target, and reshape to match dimensions
         inp_vars = input_vars + static_vars if static_vars else input_vars
-        self.input_means = torch.tensor([self.mean_sd[var][0] for var in inp_vars],
-                                        dtype=torch.float32).view(-1, 1, 1)
-        self.input_sds = torch.tensor([self.mean_sd[var][1] for var in inp_vars],
-                                      dtype=torch.float32).view(-1, 1, 1)
+        self.input_means = torch.tensor(
+            [self.mean_sd[var][0] for var in inp_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+        self.input_sds = torch.tensor(
+            [self.mean_sd[var][1] for var in inp_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        x,y = self.dataset[index]
+        x, y = self.dataset[index]
 
         if self.static_vars:
-            static = torch.tensor(np.array(
-                [self.static_data[v].values for v in self.static_vars]
-                ), dtype=torch.float32)        
-            x = torch.cat([x,static],dim=0)
+            static = torch.tensor(
+                np.array([self.static_data[v].values for v in self.static_vars]),
+                dtype=torch.float32,
+            )
+            x = torch.cat([x, static], dim=0)
 
         x = (x - self.input_means) / self.input_sds
 
-        return x,y
+        return x, y
 
     def _compute_mean_sd(self):
         sums = {}
@@ -84,17 +86,17 @@ class ERA5dataset(Dataset):
             with xr.open_dataset(file_path) as ds:
                 for var in self.input_vars:
                     arr = ds[var].values
-                    sums[var]     += arr.sum()
-                    sums_sq[var]  += (arr**2).sum()
-                    counts[var]   += arr.size
+                    sums[var] += arr.sum()
+                    sums_sq[var] += (arr**2).sum()
+                    counts[var] += arr.size
 
         # Compute for static variables
         if self.static_vars:
             for var in self.static_vars:
                 arr = self.static_data[var].values
-                sums[var]    += arr.sum()
+                sums[var] += arr.sum()
                 sums_sq[var] += (arr**2).sum()
-                counts[var]  += arr.size
+                counts[var] += arr.size
 
         # Finalize means/stds
         mean_sd = {}
@@ -104,17 +106,16 @@ class ERA5dataset(Dataset):
             mean_sd[var] = (mean, sd)
 
         return mean_sd
-    
 
-    
+
 class DataUnit(Dataset):
     def __init__(
-            self,
-            input_data:str,
-            input_vars:list[str],
-            target_data:str,
-            target_vars:list[str],
-            ):
+        self,
+        input_data: str,
+        input_vars: list[str],
+        target_data: str,
+        target_vars: list[str],
+    ):
         super().__init__()
 
         self.X = xr.open_dataset(input_data)
@@ -130,14 +131,14 @@ class DataUnit(Dataset):
 
         missing = [v for v in input_vars if v not in self.X.data_vars]
         if missing:
-             raise ValueError(f"Variable not in dataset: {missing}")
+            raise ValueError(f"Variable not in dataset: {missing}")
 
         missing = [v for v in target_vars if v not in self.Y.data_vars]
         if missing:
-             raise ValueError(f"Variable not in dataset: {missing}")
+            raise ValueError(f"Variable not in dataset: {missing}")
 
     def __len__(self):
-            return self.N
+        return self.N
 
     def __getitem__(self, idx):
         Xt = self.X.isel(valid_time=idx)
