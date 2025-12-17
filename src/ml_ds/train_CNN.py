@@ -1,4 +1,5 @@
 import argparse
+import glob
 from pathlib import Path
 
 from pytorch_lightning import Trainer
@@ -8,39 +9,40 @@ from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
 BATCH_SIZE = 20
-MAX_EPOCHS = 5
+MAX_EPOCHS = 1
 
 STATIC_VARS = ["land_mask"]
+# INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
+# TARGET_VARS = ["t2m", ]
 INPUT_VARS = ["u10", "v10"]
 TARGET_VARS = ["u10", "v10"]
 
+
 # Selecting data. Here, we just use one file (year) each for train, val and test.
 DIR_DATA = str(Path.home() / "ml-ds_data")
-INPUT_FILES = [DIR_DATA + f"/ERA5_{y}_reinterp.nc" for y in [1940, 1941, 1942]]
-TARGET_FILES = [DIR_DATA + f"/ERA5_{y}.nc" for y in [1940, 1941, 1942]]
+INPUT_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*_reinterp.nc")])
+TARGET_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*.nc") if "_reinterp" not in f])
 STATIC_DATA = DIR_DATA + "/GEBCO_gridded.nc"
-
-TRAIN_INPUT = [INPUT_FILES[0]]
-VAL_INPUT = [INPUT_FILES[1]]
-TEST_INPUT = [INPUT_FILES[2]]
-
-TRAIN_TARGET = [TARGET_FILES[0]]
-VAL_TARGET = [TARGET_FILES[1]]
-TEST_TARGET = [TARGET_FILES[2]]
 
 
 def load_datasets():
     # Create datasets
     train_data = ERA5dataset(
-        TRAIN_INPUT, INPUT_VARS, TRAIN_TARGET, TARGET_VARS, STATIC_DATA, STATIC_VARS
+        INPUT_FILES[:-2], INPUT_VARS, TARGET_FILES[:-2], TARGET_VARS, STATIC_DATA, STATIC_VARS
     )
     val_data = ERA5dataset(
-        VAL_INPUT, INPUT_VARS, VAL_TARGET, TARGET_VARS, STATIC_DATA, STATIC_VARS, train_data.mean_sd
+        INPUT_FILES[-2:-1],
+        INPUT_VARS,
+        TARGET_FILES[-2:-1],
+        TARGET_VARS,
+        STATIC_DATA,
+        STATIC_VARS,
+        train_data.mean_sd,
     )
     test_data = ERA5dataset(
-        TEST_INPUT,
+        INPUT_FILES[-1:],
         INPUT_VARS,
-        TEST_TARGET,
+        TARGET_FILES[-1:],
         TARGET_VARS,
         STATIC_DATA,
         STATIC_VARS,
@@ -59,6 +61,7 @@ def initialize_model():
         normalization="batch",
         dropout_rate=0.1,
     )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Train CNN model")
@@ -85,7 +88,7 @@ def main():
             train_dataset=train_data,
             val_dataset=val_data,
             test_dataset=test_data,
-            batch_size=BATCH_SIZE, 
+            batch_size=BATCH_SIZE,
             num_workers=8,
         )
     else:
@@ -93,8 +96,9 @@ def main():
             model, train_data, val_data, test_data, batch_size=BATCH_SIZE, num_workers=8
         )
 
-    trainer = Trainer(profiler="simple", max_epochs=MAX_EPOCHS)
+    trainer = Trainer(profiler="simple", max_epochs=MAX_EPOCHS, log_every_n_steps=10)
     trainer.fit(network)
+
 
 if __name__ == "__main__":
     main()

@@ -98,6 +98,7 @@ class LightningModule(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
+        self.log("train_loss_step", loss, on_step=True, on_epoch=False, prog_bar=False)
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
