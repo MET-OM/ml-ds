@@ -12,10 +12,10 @@ BATCH_SIZE = 20
 MAX_EPOCHS = 1
 
 STATIC_VARS = ["land_mask"]
-# INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
-# TARGET_VARS = ["t2m", ]
-INPUT_VARS = ["u10", "v10"]
-TARGET_VARS = ["u10", "v10"]
+INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
+TARGET_VARS = ["t2m", ]
+# INPUT_VARS = ["u10", "v10"]
+# TARGET_VARS = ["u10", "v10"]
 
 
 # Selecting data. Here, we just use one file (year) each for train, val and test.
