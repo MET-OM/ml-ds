@@ -51,6 +51,14 @@ class ERA5dataset(Dataset):
             [self.mean_sd[var][1] for var in inp_vars], dtype=torch.float32
         ).view(-1, 1, 1)
 
+        tar_vars = target_vars
+        self.target_means = torch.tensor(
+            [self.mean_sd[var][0] for var in tar_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+        self.target_sds = torch.tensor(
+            [self.mean_sd[var][1] for var in tar_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+
     def __len__(self):
         return len(self.dataset)
 
@@ -65,6 +73,7 @@ class ERA5dataset(Dataset):
             x = torch.cat([x, static], dim=0)
 
         x = (x - self.input_means) / self.input_sds
+        y = (y - self.target_means) / self.target_sds
 
         return x, y
 
