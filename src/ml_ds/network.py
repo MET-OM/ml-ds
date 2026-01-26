@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class LightningModule(pl.LightningModule):
     def __init__(
@@ -40,6 +40,8 @@ class LightningModule(pl.LightningModule):
         """
 
         super().__init__()
+        self.save_hyperparameters()
+
         self.model = model
         self.lr = lr
         self.batch_size = batch_size
@@ -98,8 +100,7 @@ class LightningModule(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        self.log("train_loss_step", loss, on_step=True, on_epoch=False, prog_bar=False)
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=False, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -116,9 +117,28 @@ class LightningModule(pl.LightningModule):
         self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
+    def on_train_epoch_start(self):
+        opt = self.optimizers()
+        lr = opt.param_groups[0]['lr']
+        self.log("lr", lr, on_step=False, on_epoch=True)
+
     # ----------------------------
     # Optimizer
     # ----------------------------
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-        return optimizer
+        scheduler = {
+            "scheduler": ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                threshold_mode="abs",
+                factor=0.1,
+                patience=5,
+                threshold=0.001,
+                min_lr=1e-5,
+            ),
+            "monitor": "val_loss", # metric to monitor
+            "interval": "epoch",   # check every epoch
+            "frequency": 1
+        }
+        return [optimizer], [scheduler]

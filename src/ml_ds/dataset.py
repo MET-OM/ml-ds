@@ -32,9 +32,9 @@ class ERA5dataset(Dataset):
         self.input_data = input_data
         self.target_data = target_data
 
-        # Static data
+        # Static data is loaded into memory - it's not very large, and used every sample
         if self.static_vars:
-            self.static_data = xr.open_dataset(static_data)
+            self.static_data = xr.load_dataset(static_data)
 
         # Mean/sd for each variable
         if mean_sd is None:
@@ -51,6 +51,14 @@ class ERA5dataset(Dataset):
             [self.mean_sd[var][1] for var in inp_vars], dtype=torch.float32
         ).view(-1, 1, 1)
 
+        tar_vars = target_vars
+        self.target_means = torch.tensor(
+            [self.mean_sd[var][0] for var in tar_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+        self.target_sds = torch.tensor(
+            [self.mean_sd[var][1] for var in tar_vars], dtype=torch.float32
+        ).view(-1, 1, 1)
+
     def __len__(self):
         return len(self.dataset)
 
@@ -65,6 +73,7 @@ class ERA5dataset(Dataset):
             x = torch.cat([x, static], dim=0)
 
         x = (x - self.input_means) / self.input_sds
+        y = (y - self.target_means) / self.target_sds
 
         return x, y
 
@@ -118,16 +127,13 @@ class DataUnit(Dataset):
     ):
         super().__init__()
 
-        self.X = xr.open_dataset(input_data)
-        self.Y = xr.open_dataset(target_data)
+        self.X = xr.open_dataset(input_data,cache=False)
+        self.Y = xr.open_dataset(target_data,cache=False)
 
         self.input_vars = input_vars
         self.target_vars = target_vars
 
         self.N = self.X[input_vars[0]].shape[0]
-
-        if not self.X.coords.equals(self.Y.coords):
-            raise ValueError(f"Non-matching coordinates between {input_data} and {target_data}.")
 
         missing = [v for v in input_vars if v not in self.X.data_vars]
         if missing:
