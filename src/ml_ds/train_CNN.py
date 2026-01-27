@@ -8,14 +8,14 @@ from ml_ds.dataset import ERA5dataset
 from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
-BATCH_SIZE = 20
-MAX_EPOCHS = 1
+BATCH_SIZE = 32
+MAX_EPOCHS = 100
 
 STATIC_VARS = ["land_mask"]
-INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
-TARGET_VARS = ["t2m", ]
-# INPUT_VARS = ["u10", "v10"]
-# TARGET_VARS = ["u10", "v10"]
+# INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
+# TARGET_VARS = ["t2m", ]
+INPUT_VARS = ["u10", "v10"]
+TARGET_VARS = ["u10", "v10"]
 
 
 # Selecting data. Here, we just use one file (year) each for train, val and test.
@@ -56,8 +56,8 @@ def initialize_model():
     return ConvResNet(
         in_channels=len(INPUT_VARS) + len(STATIC_VARS),
         out_channels=len(TARGET_VARS),
-        n_filters=40,
-        n_blocks=8,
+        n_filters=32,
+        n_blocks=10,
         normalization="batch",
         dropout_rate=0.1,
     )
