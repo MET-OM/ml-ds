@@ -3,6 +3,8 @@ import glob
 from pathlib import Path
 
 from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
+from torch import nn
 
 from ml_ds.dataset import ERA5dataset
 from ml_ds.models import ConvResNet
@@ -23,6 +25,7 @@ DIR_DATA = str(Path.home() / "ml-ds_data")
 INPUT_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*_reinterp.nc")])
 TARGET_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*.nc") if "_reinterp" not in f])
 STATIC_DATA = DIR_DATA + "/GEBCO_gridded.nc"
+CRITERION = nn.L1Loss()
 
 
 def load_datasets():
@@ -90,13 +93,34 @@ def main():
             test_dataset=test_data,
             batch_size=BATCH_SIZE,
             num_workers=8,
+            criterion=CRITERION,
         )
     else:
         network = LightningModule(
-            model, train_data, val_data, test_data, batch_size=BATCH_SIZE, num_workers=8
+            model,
+            train_data,
+            val_data,
+            test_data,
+            batch_size=BATCH_SIZE,
+            num_workers=8,
+            criterion=CRITERION,
         )
 
-    trainer = Trainer(profiler="simple", max_epochs=MAX_EPOCHS, log_every_n_steps=10)
+    # Configure checkpoint callback to save every epoch
+    checkpoint_callback = ModelCheckpoint(
+        dirpath="checkpoints/",
+        filename="epoch={epoch:02d}-step={step}",
+        every_n_epochs=1,
+        save_top_k=-1,  # Save all checkpoints
+        save_last=True,
+    )
+
+    trainer = Trainer(
+        profiler="simple",
+        max_epochs=MAX_EPOCHS,
+        log_every_n_steps=10,
+        callbacks=[checkpoint_callback],
+    )
     trainer.fit(network)
 
 
