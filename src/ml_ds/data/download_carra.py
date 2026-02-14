@@ -1,4 +1,5 @@
 import argparse
+import calendar
 from pathlib import Path
 
 import cdsapi
@@ -25,49 +26,40 @@ def download_data(years):
     dataset = "reanalysis-pan-carra"
     client = cdsapi.Client()
     
-    months = [
-        "01", "02", "03", "04", "05", "06",
-        "07", "08", "09", "10", "11", "12"
-    ]
-    
-    # Download each year and month separately
+    # Download each year, month, and day separately
     for year in years:
-        for month in months:
-            output_file = TARGET / f"CARRA{year}{month}.nc"
+        for month_int in range(1, 13):
+            month = f"{month_int:02d}"
+            _, last_day = calendar.monthrange(int(year), month_int)
+            for day_int in range(1, last_day + 1):
+                day = f"{day_int:02d}"
+                output_file = TARGET / f"CARRA{year}{month}{day}.nc"
+
+                if output_file.exists():
+                    print(f"Skipping existing file for {year}-{month}-{day}: {output_file}")
+                    continue
             
-            request = {
-                "level_type": "single_levels",
+                request = {
+                    "level_type": "single_levels",
                     "variable": [
-                    "2m_temperature",
-                    "land_sea_mask",
-                    "orography"
-                ],
-                "product_type": "analysis",
-                "time": [
-                    "00:00", "03:00", "06:00",
-                    "09:00", "12:00", "15:00",
-                    "18:00", "21:00"
-                ],
-                "year": [year],
-                "month": [month],
-                "day": [
-                    "01", "02", "03",
-                    "04", "05", "06",
-                    "07", "08", "09",
-                    "10", "11", "12",
-                    "13", "14", "15",
-                    "16", "17", "18",
-                    "19", "20", "21",
-                    "22", "23", "24",
-                    "25", "26", "27",
-                    "28", "29", "30",
-                    "31"
-                ],
-                "data_format": "netcdf"  # "grib"
-            }
+                        "2m_temperature",
+                        "land_sea_mask",
+                        "orography"
+                    ],
+                    "product_type": "analysis",
+                    "time": [
+                        "00:00", "03:00", "06:00",
+                        "09:00", "12:00", "15:00",
+                        "18:00", "21:00"
+                    ],
+                    "year": [year],
+                    "month": [month],
+                    "day": [day],
+                    "data_format": "netcdf"  # "grib"
+                }
             
-            print(f"Downloading data for {year}-{month} to {output_file}")
-            client.retrieve(dataset, request).download(str(output_file))
+                print(f"Downloading data for {year}-{month}-{day} to {output_file}")
+                client.retrieve(dataset, request).download(str(output_file))
 
 
 if __name__ == "__main__":
