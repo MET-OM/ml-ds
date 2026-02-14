@@ -13,12 +13,11 @@ from ml_ds.network import LightningModule
 BATCH_SIZE = 32
 MAX_EPOCHS = 100
 
-STATIC_VARS = ["land_mask"]
-# INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
-# TARGET_VARS = ["t2m", ]
-INPUT_VARS = ["u10", "v10"]
-TARGET_VARS = ["u10", "v10"]
-
+STATIC_VARS = ["land_mask", "elevation"]
+INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
+TARGET_VARS = ["t2m", ]
+# INPUT_VARS = ["u10", "v10"]
+# TARGET_VARS = ["u10", "v10"]
 
 # Selecting data. Here, we just use one file (year) each for train, val and test.
 DIR_DATA = str(Path.home() / "ml-ds_data")
@@ -59,9 +58,9 @@ def initialize_model():
     return ConvResNet(
         in_channels=len(INPUT_VARS) + len(STATIC_VARS),
         out_channels=len(TARGET_VARS),
-        n_filters=32,
-        n_blocks=10,
-        normalization="batch",
+        n_filters=100,
+        n_blocks=2,
+        # normalization="batch",
         dropout_rate=0.1,
     )
 

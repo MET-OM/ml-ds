@@ -20,6 +20,9 @@ dependencies = [
     "ipykernel",
     "torch",
     "torchvision",
+    "cdsapi",
+    "cfgrib",
+    "eccodes",
 ]
 
 [tool.pip]
