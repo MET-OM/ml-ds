@@ -1,8 +1,9 @@
-import xarray as xr
-import numpy as np
 import os
-from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
+
+import numpy as np
+import xarray as xr
+from tqdm import tqdm
 
 base_folder = "download/"
 annual_folder = "original/"

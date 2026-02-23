@@ -2,7 +2,7 @@ name: ml-ds
 channels:
   - conda-forge
 dependencies:
-  - python=3.12
+  - python=3.11
   - numpy
   - pandas
   - matplotlib
@@ -10,16 +10,16 @@ dependencies:
   - netcdf4
   - cfgrib
   - eccodes
-  - xesmf
+  - xesmf=0.9
   - dask
   - pytorch
   - torchvision
+  - scikit-learn
+  - pytorch-lightning
+  - notebook
+  - ipykernel
+  - cdsapi
   - pip
   - pip:
-      - scikit-learn
-      - pytorch-lightning
       - lightning[extra]
-      - notebook
-      - ipykernel
-      - cdsapi
       - -e .
