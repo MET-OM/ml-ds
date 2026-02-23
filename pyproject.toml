@@ -5,35 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ml-ds"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = "~=3.12"
 
-dependencies = [
-    "numpy",
-    "pandas",
-    "matplotlib",
-    "scikit-learn",
-    "xarray[complete]",
-    "netcdf4",
-    "pytorch-lightning",
-    "lightning[extra]",
-    "notebook",
-    "ipykernel",
-    "torch",
-    "torchvision",
-    "cdsapi",
-    "cfgrib",
-    "eccodes",
-]
-
-[tool.pip]
-# Extra index URL for PyTorch CUDA 13.0 wheels
-extra-index-url = [
-    "https://download.pytorch.org/whl/cu130"
-]
-
-
-# [tool.setuptools.packages.find]
-# include = ["src/ml_ds"]
+# dependencies = [
+#     "scikit-learn",
+#     "pytorch-lightning",
+#     "lightning[extra]",
+#     "notebook",
+#     "ipykernel",
+#     "cdsapi",
+# ]
 
 [tool.ruff]
 line-length = 100

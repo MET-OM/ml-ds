@@ -3,7 +3,7 @@ Statistical downscaling via machine learning.
 
 ## Installation
 ```
-conda create -n ml-ds python=3.12
+conda env create -f environment.yml
 conda activate ml-ds
 pip install -e .
 ```
