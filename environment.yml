@@ -8,6 +8,8 @@ dependencies:
   - matplotlib
   - xarray
   - netcdf4
+  - zarr
+  - numcodecs
   - cfgrib
   - eccodes
   - xesmf=0.9
