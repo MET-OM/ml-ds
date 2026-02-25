@@ -21,7 +21,6 @@ SINGLE_LEVELS_CONFIG = {
             "surface_net_solar_radiation",
             "surface_net_thermal_radiation",
             "total_cloud_cover",
-            "land_sea_mask",
             "sea_ice_cover",
             "surface_roughness",
         ],

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import cfgrib
 import xarray as xr
 
 
@@ -10,8 +11,21 @@ def convert_grib_file(path_in: Path, path_out: Path, overwrite: bool) -> str:
 	if path_out.exists() and not overwrite:
 		return f"Skipped {path_in.name} (already exists)"
 
-	with xr.open_dataset(path_in, engine="cfgrib", backend_kwargs={"indexpath": ""}) as ds:
+	parts = cfgrib.open_datasets(path_in, backend_kwargs={"indexpath": ""})
+	if not parts:
+		raise ValueError(f"No datasets found in GRIB file: {path_in}")
+
+	if len(parts) == 1:
+		ds = parts[0]
+	else:
+		ds = xr.merge(parts, compat="override", join="outer")
+
+	try:
 		ds.to_netcdf(path_out)
+	finally:
+		ds.close()
+		for part in parts:
+			part.close()
 
 	return f"Converted {path_in.name} -> {path_out.name}"
 
