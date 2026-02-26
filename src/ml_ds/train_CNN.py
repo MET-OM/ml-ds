@@ -1,66 +1,39 @@
 import argparse
-import glob
 from pathlib import Path
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch import nn
 
-from ml_ds.dataset import ERA5dataset
+from ml_ds.dataset import ERA5ZarrDataset, build_split_subsets
 from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
 BATCH_SIZE = 32
 MAX_EPOCHS = 100
+NUM_WORKERS = 8
+LEARNING_RATE = 1e-3
 
-STATIC_VARS = ["land_mask", "elevation"]
-INPUT_VARS = ["u10", "v10", "t2m", "d2m"]
-TARGET_VARS = ["t2m", ]
-# INPUT_VARS = ["u10", "v10"]
-# TARGET_VARS = ["u10", "v10"]
+DATA_ROOT = Path.home() / "ml-ds_data" / "input_data"
+INPUT_FILE = DATA_ROOT / "2011.zarr"
+STATS_FILE = DATA_ROOT / "era5_normalization_stats.zarr"
 
-# Selecting data. Here, we just use one file (year) each for train, val and test.
-DIR_DATA = str(Path.home() / "ml-ds_data")
-INPUT_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*_reinterp.nc")])
-TARGET_FILES = sorted([f for f in glob.glob(f"{DIR_DATA}/ERA5*.nc") if "_reinterp" not in f])
-STATIC_DATA = DIR_DATA + "/GEBCO_gridded.nc"
 CRITERION = nn.L1Loss()
 
 
-def load_datasets():
-    # Create datasets
-    train_data = ERA5dataset(
-        INPUT_FILES[:-2], INPUT_VARS, TARGET_FILES[:-2], TARGET_VARS, STATIC_DATA, STATIC_VARS
-    )
-    val_data = ERA5dataset(
-        INPUT_FILES[-2:-1],
-        INPUT_VARS,
-        TARGET_FILES[-2:-1],
-        TARGET_VARS,
-        STATIC_DATA,
-        STATIC_VARS,
-        train_data.mean_sd,
-    )
-    test_data = ERA5dataset(
-        INPUT_FILES[-1:],
-        INPUT_VARS,
-        TARGET_FILES[-1:],
-        TARGET_VARS,
-        STATIC_DATA,
-        STATIC_VARS,
-        train_data.mean_sd,
-    )
-    return train_data, val_data, test_data
+def load_datasets() -> tuple[ERA5ZarrDataset, object, object]:
+    full_train_dataset = ERA5ZarrDataset(INPUT_FILE, STATS_FILE)
+    val_dataset, test_dataset = build_split_subsets(full_train_dataset)
+    return full_train_dataset, val_dataset, test_dataset
 
 
-def initialize_model():
-    # Initialize model
+def initialize_model(in_channels: int, out_channels: int) -> ConvResNet:
     return ConvResNet(
-        in_channels=len(INPUT_VARS) + len(STATIC_VARS),
-        out_channels=len(TARGET_VARS),
+        in_channels=in_channels,
+        out_channels=out_channels,
         n_filters=100,
         n_blocks=2,
-        # normalization="batch",
+        normalization="batch",
         dropout_rate=0.1,
     )
 
@@ -73,14 +46,25 @@ def main():
         default=None,
         help="Path to checkpoint to resume from",
     )
+    parser.add_argument(
+        "--enable-validation",
+        action="store_true",
+        help="Enable validation loop. Default is disabled (train-only).",
+    )
     args = parser.parse_args()
 
     train_data, val_data, test_data = load_datasets()
     print(f"Training data: {len(train_data)} samples.")
-    print(f"Validation data: {len(val_data)} samples.")
-    print(f"Test data: {len(test_data)} samples.")
+    print(f"Validation pipeline ready: {len(val_data)} samples.")
+    print(f"Test pipeline ready: {len(test_data)} samples.")
 
-    model = initialize_model()
+    print(f"Input channels: {len(train_data.input_vars)} -> {train_data.input_vars}")
+    print(f"Target channels: {len(train_data.target_vars)} -> {train_data.target_vars}")
+
+    model = initialize_model(
+        in_channels=len(train_data.input_vars),
+        out_channels=len(train_data.target_vars),
+    )
     print(model)
 
     if args.checkpoint:
@@ -90,19 +74,23 @@ def main():
             train_dataset=train_data,
             val_dataset=val_data,
             test_dataset=test_data,
+            lr=LEARNING_RATE,
             batch_size=BATCH_SIZE,
-            num_workers=8,
+            num_workers=NUM_WORKERS,
             criterion=CRITERION,
+            enable_validation=args.enable_validation,
         )
     else:
         network = LightningModule(
-            model,
-            train_data,
-            val_data,
-            test_data,
+            model=model,
+            train_dataset=train_data,
+            val_dataset=val_data,
+            test_dataset=test_data,
+            lr=LEARNING_RATE,
             batch_size=BATCH_SIZE,
-            num_workers=8,
+            num_workers=NUM_WORKERS,
             criterion=CRITERION,
+            enable_validation=args.enable_validation,
         )
 
     # Configure checkpoint callback to save every epoch
@@ -119,6 +107,8 @@ def main():
         max_epochs=MAX_EPOCHS,
         log_every_n_steps=10,
         callbacks=[checkpoint_callback],
+        num_sanity_val_steps=0,
+        limit_val_batches=0 if not args.enable_validation else 1.0,
     )
     trainer.fit(network)
 
