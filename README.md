@@ -5,5 +5,4 @@ Statistical downscaling via machine learning.
 ```
 conda env create -f environment.yml
 conda activate ml-ds
-pip install -e .
 ```
