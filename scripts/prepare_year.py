@@ -6,6 +6,7 @@ import cfgrib
 import numpy as np
 import xarray as xr
 import xesmf as xe
+from numcodecs import Blosc
 
 DATA_ROOT = Path.home() / "ml-ds_data"
 ERA5_ROOT = DATA_ROOT / "ERA5"
@@ -16,6 +17,7 @@ OUTPUT_ROOT = DATA_ROOT / "input_data"
 X_SLICE = slice(2100, 2500)
 Y_SLICE = slice(400, 1400)
 TIME_CHUNK = 16
+ZARR_COMPRESSOR = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
 
 
 def flatten_forecast_var(ds, varname):
@@ -205,7 +207,7 @@ def process_month(
             regridder=regridder,
             time_chunk=1,
         )
-        regridded_era[var_name] = var_on_carra.compute()
+        regridded_era[var_name] = var_on_carra  # .compute()
 
     merged_ds = xr.Dataset()
     for source in (regridded_era, carra_vars):
@@ -217,11 +219,40 @@ def process_month(
 
 def write_month_to_zarr(merged_ds, zarr_path, first_month):
     ds_to_save = merged_ds.chunk({"time": TIME_CHUNK}) if "time" in merged_ds.dims else merged_ds
+    encoding = {var_name: {"compressor": ZARR_COMPRESSOR} for var_name in ds_to_save.data_vars}
 
     if first_month:
-        ds_to_save.to_zarr(zarr_path, mode="w")
+        ds_to_save.to_zarr(
+            zarr_path,
+            mode="w",
+            encoding=encoding,
+            zarr_format=2,
+            align_chunks=True,
+        )
     else:
-        ds_to_save.to_zarr(zarr_path, mode="a", append_dim="time")
+        try:
+            ds_to_save.to_zarr(
+                zarr_path,
+                mode="a",
+                append_dim="time",
+                zarr_format=2,
+                align_chunks=True,
+            )
+        except ValueError as exc:
+            if "overlap multiple Dask chunks" not in str(exc):
+                raise
+            print(
+                "Chunk alignment warning: detected Dask/Zarr chunk overlap during append; "
+                "retrying with a safe time rechunk (time=1)"
+            )
+            ds_safe = ds_to_save.chunk({"time": 1})
+            ds_safe.to_zarr(
+                zarr_path,
+                mode="a",
+                append_dim="time",
+                zarr_format=2,
+                align_chunks=True,
+            )
 
 
 def prepare_year(year, output_dir):
@@ -244,7 +275,7 @@ def prepare_year(year, output_dir):
                 f"{month_info['era5_pl'].name}, "
                 f"{month_info['era5_sl'].name}, "
                 f"{month_info['carra'].name}"
-            )
+            ),
         )
         merged_ds, grid_out, regridder = process_month(
             month_info,
