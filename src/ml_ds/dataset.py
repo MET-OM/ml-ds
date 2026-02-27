@@ -127,12 +127,41 @@ class ERA5ZarrDataset(Dataset):
         self.indices = np.asarray(
             indices if indices is not None else np.arange(total_samples), dtype=np.int64
         )
+        self.time_chunk_size = self._infer_time_chunk_size()
 
         self.static_tensor = self._load_static_tensor()
 
         stats = ZarrNormalizationStats(stats_file)
         self.input_means, self.input_stds = stats.tensor_stats(self.input_vars)
         self.target_means, self.target_stds = stats.tensor_stats(self.target_vars)
+
+    def _infer_time_chunk_size(self) -> int:
+        reference_var = self.variable_groups.dynamic_inputs[0]
+        array = self.data[reference_var]
+        time_dim = self._time_dims[reference_var]
+        time_axis = array.get_axis_num(time_dim)
+
+        chunks_attr = array.encoding.get("chunks", None)
+        if chunks_attr is not None:
+            try:
+                time_chunk = int(chunks_attr[time_axis])
+                if time_chunk > 0:
+                    return time_chunk
+            except (TypeError, ValueError, IndexError):
+                pass
+
+        chunks = getattr(array.data, "chunks", None)
+        if chunks is not None:
+            try:
+                time_chunks = chunks[time_axis]
+                if len(time_chunks) > 0:
+                    time_chunk = int(time_chunks[0])
+                    if time_chunk > 0:
+                        return time_chunk
+            except (TypeError, ValueError, IndexError):
+                pass
+
+        return int(array.sizes[time_dim])
 
     def __len__(self) -> int:
         return int(self.indices.size)

@@ -10,9 +10,8 @@ from ml_ds.dataset import ERA5ZarrDataset
 from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
-BATCH_SIZE = 3
 MAX_EPOCHS = 100
-NUM_WORKERS = 1
+NUM_WORKERS = 3
 LEARNING_RATE = 1e-3
 N_FILTERS = 100
 N_BLOCKS = 2
@@ -168,6 +167,13 @@ def main():
     print(f"Test pipeline ready: {0 if test_data is None else len(test_data)} samples.")
 
     train_dataset_for_vars = train_data.dataset if hasattr(train_data, "dataset") else train_data
+    time_chunk_size = getattr(train_dataset_for_vars, "time_chunk_size", None)
+    if time_chunk_size is None or int(time_chunk_size) <= 0:
+        raise ValueError(
+            "Could not infer a valid time chunk size from the input dataset. "
+            "Batch size is required to come from input Zarr chunking."
+        )
+    batch_size = int(time_chunk_size)
     print(
         "Input channels: "
         f"{len(train_dataset_for_vars.input_vars)} -> {train_dataset_for_vars.input_vars}"
@@ -176,6 +182,7 @@ def main():
         "Target channels: "
         f"{len(train_dataset_for_vars.target_vars)} -> {train_dataset_for_vars.target_vars}"
     )
+    print(f"Batch size (from time chunking): {batch_size}")
 
     model = initialize_model(
         in_channels=len(train_dataset_for_vars.input_vars),
@@ -196,7 +203,7 @@ def main():
             val_dataset=val_data,
             test_dataset=test_data,
             lr=LEARNING_RATE,
-            batch_size=BATCH_SIZE,
+            batch_size=batch_size,
             num_workers=NUM_WORKERS,
             criterion=CRITERION,
             enable_validation=enable_validation,
@@ -208,7 +215,7 @@ def main():
             val_dataset=val_data,
             test_dataset=test_data,
             lr=LEARNING_RATE,
-            batch_size=BATCH_SIZE,
+            batch_size=batch_size,
             num_workers=NUM_WORKERS,
             criterion=CRITERION,
             enable_validation=enable_validation,

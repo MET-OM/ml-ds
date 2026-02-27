@@ -2,7 +2,43 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler
+
+
+class ChunkAlignedBatchSampler(Sampler[list[int]]):
+    def __init__(self, dataset: Dataset, chunk_size: int, shuffle: bool):
+        self.dataset = dataset
+        self.chunk_size = int(chunk_size)
+        self.shuffle = shuffle
+
+        if self.chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
+
+        indices_attr = getattr(dataset, "indices", None)
+        if indices_attr is None:
+            raise ValueError("ChunkAlignedBatchSampler requires dataset.indices")
+
+        index_pairs = [
+            (position, int(time_index))
+            for position, time_index in enumerate(indices_attr)
+        ]
+        chunk_map: dict[int, list[int]] = {}
+        for position, time_index in index_pairs:
+            chunk_id = time_index // self.chunk_size
+            chunk_map.setdefault(chunk_id, []).append(position)
+
+        self._chunk_groups = list(chunk_map.values())
+
+    def __iter__(self):
+        chunk_groups = list(self._chunk_groups)
+        if self.shuffle:
+            permutation = torch.randperm(len(chunk_groups)).tolist()
+            chunk_groups = [chunk_groups[idx] for idx in permutation]
+
+        yield from chunk_groups
+
+    def __len__(self) -> int:
+        return len(self._chunk_groups)
 
 
 class LightningModule(pl.LightningModule):
@@ -10,10 +46,10 @@ class LightningModule(pl.LightningModule):
         self,
         model: nn.Module,
         train_dataset: Dataset,
+        batch_size: int,
         val_dataset: Dataset | None = None,
         test_dataset: Dataset | None = None,
         lr: float = 1e-3,
-        batch_size: int = 16,
         num_workers: int = 4,
         criterion: nn.Module | None = None,
         enable_validation: bool = False,
@@ -25,6 +61,8 @@ class LightningModule(pl.LightningModule):
 
         self.model = model
         self.lr = lr
+        if batch_size <= 0:
+            raise ValueError("batch_size must be > 0")
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.enable_validation = enable_validation
@@ -36,6 +74,23 @@ class LightningModule(pl.LightningModule):
         self.criterion = criterion if criterion is not None else nn.MSELoss()
 
     def _build_loader(self, dataset: Dataset, shuffle: bool) -> DataLoader:
+        chunk_size = int(getattr(dataset, "time_chunk_size", 0))
+        has_indices = hasattr(dataset, "indices")
+
+        if chunk_size > 0 and has_indices and shuffle:
+            batch_sampler = ChunkAlignedBatchSampler(
+                dataset=dataset,
+                chunk_size=chunk_size,
+                shuffle=True,
+            )
+            return DataLoader(
+                dataset,
+                batch_sampler=batch_sampler,
+                num_workers=self.num_workers,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=self.num_workers > 0,
+            )
+
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
