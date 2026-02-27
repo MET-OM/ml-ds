@@ -111,33 +111,35 @@ class ERA5ZarrDataset(Dataset):
         super().__init__()
 
         self.input_file = Path(input_file)
-        self.data = xr.open_zarr(self.input_file, consolidated=True)
+        # chunks here are dask chunks, not zarr chunks
+        data = xr.open_zarr(self.input_file, consolidated=True, chunks=None)
+        self.data = None
 
         discovery = ZarrVariableDiscovery()
-        self.variable_groups = variable_groups or discovery.discover(self.data)
+        self.variable_groups = variable_groups or discovery.discover(data)
 
         self.input_vars = self.variable_groups.dynamic_inputs + self.variable_groups.static_inputs
         self.target_vars = self.variable_groups.targets
 
         self._time_dims = {
-            var: self.data[var].dims[0]
+            var: data[var].dims[0]
             for var in (self.variable_groups.dynamic_inputs + self.variable_groups.targets)
         }
-        total_samples = int(self.data[self.variable_groups.dynamic_inputs[0]].shape[0])
+        total_samples = int(data[self.variable_groups.dynamic_inputs[0]].shape[0])
         self.indices = np.asarray(
             indices if indices is not None else np.arange(total_samples), dtype=np.int64
         )
-        self.time_chunk_size = self._infer_time_chunk_size()
+        self.time_chunk_size = self._infer_time_chunk_size(data)
 
-        self.static_tensor = self._load_static_tensor()
+        self.static_tensor = self._load_static_tensor(data)
 
         stats = ZarrNormalizationStats(stats_file)
         self.input_means, self.input_stds = stats.tensor_stats(self.input_vars)
         self.target_means, self.target_stds = stats.tensor_stats(self.target_vars)
 
-    def _infer_time_chunk_size(self) -> int:
+    def _infer_time_chunk_size(self, data) -> int:
         reference_var = self.variable_groups.dynamic_inputs[0]
-        array = self.data[reference_var]
+        array = data[reference_var]
         time_dim = self._time_dims[reference_var]
         time_axis = array.get_axis_num(time_dim)
 
@@ -165,8 +167,13 @@ class ERA5ZarrDataset(Dataset):
 
     def __len__(self) -> int:
         return int(self.indices.size)
+    
+    def _ensure_open(self):
+        if self.data is None:
+            self.data = xr.open_zarr(self.input_file, consolidated=True, chunks=None)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        self._ensure_open()
         time_index = int(self.indices[index])
 
         dynamic = np.stack(
@@ -192,9 +199,9 @@ class ERA5ZarrDataset(Dataset):
         y = (y - self.target_means) / self.target_stds
         return x, y
 
-    def _load_static_tensor(self) -> torch.Tensor:
+    def _load_static_tensor(self, data) -> torch.Tensor:
         static = np.stack(
-            [self.data[var].values for var in self.variable_groups.static_inputs], axis=0
+            [data[var].values for var in self.variable_groups.static_inputs], axis=0
         )
         return torch.tensor(static, dtype=torch.float32)
 

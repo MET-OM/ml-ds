@@ -11,7 +11,7 @@ from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
 MAX_EPOCHS = 100
-NUM_WORKERS = 3
+NUM_WORKERS = 8
 LEARNING_RATE = 1e-3
 N_FILTERS = 100
 N_BLOCKS = 2
