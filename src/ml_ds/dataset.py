@@ -44,10 +44,6 @@ class ZarrVariableDiscovery:
             raise ValueError(
                 "No dynamic predictor variables found. Expected 3D variables starting with 'x_'."
             )
-        if len(static_inputs) != len(self.static_candidates):
-            raise ValueError("Missing static predictors. Expected 2D variables: x_lsm and x_orog.")
-        if len(targets) != 3:
-            raise ValueError("Expected exactly 3 target variables with prefix 'y_'.")
 
         return VariableGroups(
             dynamic_inputs=dynamic_inputs, static_inputs=static_inputs, targets=targets
@@ -72,20 +68,21 @@ class ZarrNormalizationStats:
         return mean_tensor, std_tensor
 
     def _extract_mean_std(self, variable: str) -> tuple[float, float]:
-        if variable not in self.stats:
-            raise ValueError(f"Variable '{variable}' was not found in normalization stats zarr.")
-
-        array = self.stats[variable]
+        array = self.stats.get(variable, None)
         dim_candidates = ["stat", "stats", "statistic", "statistics"]
-        stat_dim = next((dim for dim in dim_candidates if dim in array.dims), None)
+        stat_dim = (
+            next((dim for dim in dim_candidates if dim in array.dims), None)
+            if array is not None
+            else None
+        )
 
-        if stat_dim is not None:
+        if array is not None and stat_dim is not None:
             coord_values = [str(v).lower() for v in array.coords[stat_dim].values]
             if "mean" in coord_values and "std" in coord_values:
                 mean = float(array.sel({stat_dim: "mean"}).values)
                 std = float(array.sel({stat_dim: "std"}).values)
                 return mean, std
-            if array.sizes[stat_dim] >= 2:
+            if array.sizes[stat_dim] == 2:
                 mean = float(array.isel({stat_dim: 0}).values)
                 std = float(array.isel({stat_dim: 1}).values)
                 return mean, std
@@ -95,7 +92,7 @@ class ZarrNormalizationStats:
         if mean_key in self.stats and std_key in self.stats:
             return float(self.stats[mean_key].values), float(self.stats[std_key].values)
 
-        if "mean" in array.attrs and "std" in array.attrs:
+        if array is not None and "mean" in array.attrs and "std" in array.attrs:
             return float(array.attrs["mean"]), float(array.attrs["std"])
 
         raise ValueError(
@@ -114,7 +111,7 @@ class ERA5ZarrDataset(Dataset):
         super().__init__()
 
         self.input_file = Path(input_file)
-        self.data = xr.open_zarr(self.input_file)
+        self.data = xr.open_zarr(self.input_file, consolidated=True)
 
         discovery = ZarrVariableDiscovery()
         self.variable_groups = variable_groups or discovery.discover(self.data)
@@ -177,13 +174,32 @@ def build_split_subsets(
     dataset: Dataset,
     val_fraction: float = 0.1,
     test_fraction: float = 0.1,
-) -> tuple[Subset, Subset]:
+    seed: int | None = None,
+    shuffle: bool = True,
+) -> tuple[Subset, Subset, Subset]:
+    if val_fraction < 0 or test_fraction < 0:
+        raise ValueError("val_fraction and test_fraction must be non-negative.")
+    if val_fraction + test_fraction >= 1.0:
+        raise ValueError("val_fraction + test_fraction must be < 1.0.")
+
     n_samples = len(dataset)
+    if n_samples == 0:
+        raise ValueError("Cannot split an empty dataset.")
+
     val_size = int(n_samples * val_fraction)
     test_size = int(n_samples * test_fraction)
-    val_start = max(n_samples - (val_size + test_size), 0)
-    test_start = max(n_samples - test_size, 0)
+    train_size = n_samples - val_size - test_size
 
-    val_subset = Subset(dataset, list(range(val_start, test_start)))
-    test_subset = Subset(dataset, list(range(test_start, n_samples)))
-    return val_subset, test_subset
+    indices = np.arange(n_samples)
+    if shuffle:
+        rng = np.random.default_rng(seed)
+        rng.shuffle(indices)
+
+    train_indices = indices[:train_size].tolist()
+    val_indices = indices[train_size : train_size + val_size].tolist()
+    test_indices = indices[train_size + val_size :].tolist()
+
+    train_subset = Subset(dataset, train_indices)
+    val_subset = Subset(dataset, val_indices)
+    test_subset = Subset(dataset, test_indices)
+    return train_subset, val_subset, test_subset

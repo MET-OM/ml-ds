@@ -12,6 +12,8 @@ def _build_normalization(name: str | None, channels: int) -> nn.Module | None:
 
 
 def _build_activation(name: str) -> nn.Module:
+    if name in ("none", "identity"):
+        return nn.Identity()
     if name == "relu":
         return nn.ReLU(inplace=True)
     if name == "gelu":
@@ -78,13 +80,14 @@ class ResBlock(nn.Module):
             channels,
             channels,
             normalization=normalization,
-            activation=activation,
+            activation="none",
             dropout_rate=dropout_rate,
             dropout_variant=dropout_variant,
         )
+        self.post_activation = _build_activation(activation)
 
     def forward(self, x):
-        return x + self.conv2(self.conv1(x))  # simple residual connection
+        return self.post_activation(x + self.conv2(self.conv1(x)))
 
 
 class ConvResNet(nn.Module):
@@ -106,9 +109,11 @@ class ConvResNet(nn.Module):
         self.localcon_layer = None
         if localcon_layer:
             self.localcon_layer = nn.Conv2d(in_channels, n_filters, kernel_size=3, padding=1)
-            in_channels = n_filters
+        elif in_channels == n_filters:
+            self.localcon_layer = nn.Identity()
+        else:
+            self.localcon_layer = nn.Conv2d(in_channels, n_filters, kernel_size=1)
 
-        self.initial_conv = nn.Conv2d(in_channels, n_filters, kernel_size=3, padding=1)
         self.blocks = nn.ModuleList(
             [
                 ResBlock(n_filters, normalization, activation, dropout_rate, dropout_variant)
@@ -123,9 +128,7 @@ class ConvResNet(nn.Module):
         self.final_conv = nn.Conv2d(n_filters, out_channels, kernel_size=1)
 
     def forward(self, x):
-        if self.localcon_layer is not None:
-            x = self.localcon_layer(x)
-        x = self.initial_conv(x)
+        x = self.localcon_layer(x)
         for block in self.blocks:
             x = block(x)
         if self.attention is not None:
