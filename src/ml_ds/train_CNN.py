@@ -10,7 +10,7 @@ from ml_ds.dataset import ERA5ZarrDataset
 from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
-MAX_EPOCHS = 100
+MAX_EPOCHS = 3
 NUM_WORKERS = 8
 LEARNING_RATE = 1e-3
 N_FILTERS = 100
@@ -20,7 +20,7 @@ NORMALIZATION: str | None = "batch"
 ACTIVATION = "relu"
 
 DATA_ROOT = Path.home() / "ml-ds_data" / "input_data"
-DEFAULT_INPUT_FILE = Path("2011.zarr")
+DEFAULT_INPUT_FILE = Path("data.zarr")
 DEFAULT_STATS_FILE = Path("era5_normalization_stats.zarr")
 DEFAULT_RESULTS_DIR = Path.home() / "ml-ds_results"
 
