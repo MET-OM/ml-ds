@@ -16,7 +16,7 @@ OUTPUT_ROOT = DATA_ROOT / "input_data"
 
 X_SLICE = slice(2100, 2500)
 Y_SLICE = slice(400, 1400)
-TIME_CHUNK = 16
+TIME_CHUNK = 3
 ZARR_COMPRESSOR = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
 
 
@@ -255,22 +255,29 @@ def write_month_to_zarr(merged_ds, zarr_path, first_month):
             )
 
 
-def prepare_year(year, output_dir):
-    month_index = build_month_index(year)
+def prepare_years(years, output_path):
+    years_sorted = sorted(set(str(year) for year in years))
+    if not years_sorted:
+        raise ValueError("No years provided")
+
+    month_index_all = []
+    for year in years_sorted:
+        for month_info in build_month_index(year):
+            month_index_all.append({"year": year, **month_info})
+
     coarse_lat, coarse_lon = get_coarse_grid()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    zarr_path = output_dir / f"{year}.zarr"
-    if zarr_path.exists():
-        print(f"Overwriting existing output: {zarr_path}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        print(f"Overwriting existing output: {output_path}")
 
     grid_out = None
     regridder = None
 
-    for idx, month_info in enumerate(month_index):
+    for idx, month_info in enumerate(month_index_all):
         include_static = idx == 0
         print(
-            f"Processing {year}-{month_info['month'][-2:]}: ",
+            f"Processing {month_info['year']}-{month_info['month'][-2:]}: ",
             (
                 f"{month_info['era5_pl'].name}, "
                 f"{month_info['era5_sl'].name}, "
@@ -285,16 +292,14 @@ def prepare_year(year, output_dir):
             regridder=regridder,
             include_static=include_static,
         )
-        write_month_to_zarr(merged_ds, zarr_path, first_month=(idx == 0))
+        write_month_to_zarr(merged_ds, output_path, first_month=(idx == 0))
 
-    print(f"Saved yearly dataset to: {zarr_path}")
+    print(f"Saved combined dataset to: {output_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description=(
-            "Prepare yearly ML input zarr by processing all monthly files in each year folder"
-        )
+        description="Prepare one ML input zarr by processing all monthly files across given years"
     )
     parser.add_argument(
         "years",
@@ -302,15 +307,16 @@ def main():
         help="Year(s) to process (e.g. 2011 or 2011 2012)",
     )
     parser.add_argument(
-        "--output-dir",
+        "--output-file",
         type=Path,
-        default=OUTPUT_ROOT,
-        help=f"Output directory for yearly zarr files (default: {OUTPUT_ROOT})",
+        default=OUTPUT_ROOT / "all_years.zarr",
+        help=(
+            "Output zarr path for combined years "
+            f"(default: {OUTPUT_ROOT / 'all_years.zarr'})"
+        ),
     )
     args = parser.parse_args()
-
-    for year in args.years:
-        prepare_year(year, output_dir=args.output_dir)
+    prepare_years(args.years, output_path=args.output_file)
 
 
 if __name__ == "__main__":

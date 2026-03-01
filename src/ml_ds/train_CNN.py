@@ -10,7 +10,7 @@ from ml_ds.dataset import ERA5ZarrDataset
 from ml_ds.models import ConvResNet
 from ml_ds.network import LightningModule
 
-MAX_EPOCHS = 3
+MAX_EPOCHS = 10
 NUM_WORKERS = 8
 LEARNING_RATE = 1e-3
 N_FILTERS = 100
