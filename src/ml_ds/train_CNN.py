@@ -21,7 +21,7 @@ ACTIVATION = "relu"
 
 DATA_ROOT = Path.home() / "ml-ds_data" / "input_data"
 DEFAULT_INPUT_FILE = Path("data.zarr")
-DEFAULT_STATS_FILE = Path("era5_normalization_stats.zarr")
+DEFAULT_STATS_FILE = Path("stats.zarr")
 DEFAULT_RESULTS_DIR = Path.home() / "ml-ds_results"
 
 CRITERION = nn.L1Loss()

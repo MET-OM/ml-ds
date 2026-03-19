@@ -14,9 +14,9 @@ CARRA_ROOT = DATA_ROOT / "CARRA2"
 EC_GRID_FILE = DATA_ROOT / "EC-Earth3.grid.nc"
 OUTPUT_ROOT = DATA_ROOT / "input_data"
 
-X_SLICE = slice(2100, 2500)
-Y_SLICE = slice(400, 1400)
-TIME_CHUNK = 3
+X_SLICE = slice(2100, 2328)
+Y_SLICE = slice(400, 628)
+TIME_CHUNK = 1
 ZARR_COMPRESSOR = Blosc(cname="zstd", clevel=3, shuffle=Blosc.SHUFFLE)
 
 
@@ -145,7 +145,11 @@ def load_carra_vars(carra_file, include_static):
 
 
 def regrid_era5_to_carra(var_era, coarse_lat, coarse_lon, grid_out, regridder=None, time_chunk=1):
-    var_era_coarse = var_era.interp(latitude=coarse_lat, longitude=coarse_lon, method="linear")
+    if coarse_lat is not None and coarse_lon is not None:
+        var_era_coarse = var_era.interp(latitude=coarse_lat, longitude=coarse_lon, method="linear")
+    else:
+        var_era_coarse = var_era
+
     var_era_coarse = var_era_coarse.dropna(dim="latitude", how="all").dropna(
         dim="longitude", how="all"
     )
@@ -212,7 +216,7 @@ def process_month(
     merged_ds = xr.Dataset()
     for source in (regridded_era, carra_vars):
         for key, value in source.items():
-            merged_ds[key] = value.astype(np.float32, copy=False)
+            merged_ds[key] = value.fillna(0).astype(np.float32, copy=False)
 
     return merged_ds, grid_out, regridder
 
@@ -265,7 +269,7 @@ def prepare_years(years, output_path):
         for month_info in build_month_index(year):
             month_index_all.append({"year": year, **month_info})
 
-    coarse_lat, coarse_lon = get_coarse_grid()
+    coarse_lat, coarse_lon = None, None  # get_coarse_grid()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
@@ -309,10 +313,10 @@ def main():
     parser.add_argument(
         "--output-file",
         type=Path,
-        default=OUTPUT_ROOT / "all_years.zarr",
+        default=OUTPUT_ROOT / "data.zarr",
         help=(
             "Output zarr path for combined years "
-            f"(default: {OUTPUT_ROOT / 'all_years.zarr'})"
+            f"(default: {OUTPUT_ROOT / 'data.zarr'})"
         ),
     )
     args = parser.parse_args()
