@@ -10,8 +10,8 @@
   - `train_CNN.py`: file paths, CLI flags, Trainer/callback assembly.
 
 ## Data contracts (critical)
-- Training data is expected at `~/ml-ds_data/input_data/2011.zarr`.
-- Normalization stats are expected at `~/ml-ds_data/input_data/era5_normalization_stats.zarr`.
+- Training data is expected at `~/ml-ds_data/input_data/data.zarr`.
+- Normalization stats are expected at `~/ml-ds_data/input_data/stats.zarr`.
 - Variable conventions in input Zarr:
   - Dynamic predictors: all 3D variables prefixed with `x_`.
   - Static predictors: 2D `x_lsm` and `x_orog`.

@@ -24,4 +24,5 @@ dependencies:
   - pip
   - pip:
       - lightning[extra]
+      - phiflow
       - -e .
