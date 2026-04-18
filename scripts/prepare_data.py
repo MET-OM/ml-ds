@@ -59,6 +59,30 @@ def _files_by_month(folder):
     return mapping
 
 
+def _next_month(yyyymm):
+    year = int(yyyymm[:4])
+    month = int(yyyymm[4:6])
+    if month == 12:
+        return f"{year + 1}01"
+    return f"{year}{month + 1:02d}"
+
+
+def _month_start(yyyymm):
+    return np.datetime64(f"{yyyymm[:4]}-{yyyymm[4:6]}-01")
+
+
+def get_existing_time_max(zarr_path):
+    if not zarr_path.exists():
+        return None
+    ds_existing = xr.open_zarr(zarr_path, chunks={})
+    if "time" not in ds_existing.coords:
+        return None
+    time_values = ds_existing["time"].values
+    if time_values.size == 0:
+        return None
+    return np.max(time_values)
+
+
 def build_month_index(year):
     year_str = str(year)
     era_pl = _files_by_month(ERA5_ROOT / year_str / "pressure-levels")
@@ -221,9 +245,14 @@ def process_month(
     return merged_ds, grid_out, regridder
 
 
-def write_month_to_zarr(merged_ds, zarr_path, first_month):
+def write_month_to_zarr(merged_ds, zarr_path, first_month, existing_time_max=None):
     ds_to_save = merged_ds.chunk({"time": TIME_CHUNK}) if "time" in merged_ds.dims else merged_ds
     encoding = {var_name: {"compressor": ZARR_COMPRESSOR} for var_name in ds_to_save.data_vars}
+
+    if not first_month and existing_time_max is not None and "time" in ds_to_save.coords:
+        ds_to_save = ds_to_save.sel(time=ds_to_save["time"] > existing_time_max)
+        if ds_to_save.sizes.get("time", 0) == 0:
+            return existing_time_max, False
 
     if first_month:
         ds_to_save.to_zarr(
@@ -258,8 +287,14 @@ def write_month_to_zarr(merged_ds, zarr_path, first_month):
                 align_chunks=True,
             )
 
+    updated_time_max = existing_time_max
+    if "time" in ds_to_save.coords and ds_to_save.sizes.get("time", 0) > 0:
+        updated_time_max = np.max(ds_to_save["time"].values)
 
-def prepare_years(years, output_path):
+    return updated_time_max, True
+
+
+def prepare_years(years, output_path, resume=False, resume_from=None):
     years_sorted = sorted(set(str(year) for year in years))
     if not years_sorted:
         raise ValueError("No years provided")
@@ -272,14 +307,34 @@ def prepare_years(years, output_path):
     coarse_lat, coarse_lon = None, None  # get_coarse_grid()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if output_path.exists():
+    if output_path.exists() and not resume:
         print(f"Overwriting existing output: {output_path}")
+
+    existing_time_max = get_existing_time_max(output_path) if resume else None
+    if resume and output_path.exists():
+        print(f"Resuming append into existing output: {output_path}")
+        if existing_time_max is not None:
+            print(f"Existing max time in output: {existing_time_max}")
 
     grid_out = None
     regridder = None
+    wrote_any = False
 
-    for idx, month_info in enumerate(month_index_all):
-        include_static = idx == 0
+    for month_info in month_index_all:
+        month_key = month_info["month"]
+        if resume_from is not None and month_key < resume_from:
+            print(f"Skipping {month_info['year']}-{month_key[-2:]}: before --resume-from {resume_from}")
+            continue
+
+        month_end = _month_start(_next_month(month_key))
+        if existing_time_max is not None and existing_time_max >= month_end:
+            print(
+                f"Skipping {month_info['year']}-{month_key[-2:]}: "
+                "already present in output"
+            )
+            continue
+
+        include_static = not output_path.exists() and not wrote_any
         print(
             f"Processing {month_info['year']}-{month_info['month'][-2:]}: ",
             (
@@ -296,7 +351,14 @@ def prepare_years(years, output_path):
             regridder=regridder,
             include_static=include_static,
         )
-        write_month_to_zarr(merged_ds, output_path, first_month=(idx == 0))
+        first_month = not output_path.exists() and not wrote_any
+        existing_time_max, wrote_month = write_month_to_zarr(
+            merged_ds,
+            output_path,
+            first_month=first_month,
+            existing_time_max=existing_time_max,
+        )
+        wrote_any = wrote_any or wrote_month
 
     print(f"Saved combined dataset to: {output_path}")
 
@@ -319,8 +381,34 @@ def main():
             f"(default: {OUTPUT_ROOT / 'data.zarr'})"
         ),
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Continue writing to an existing output zarr and skip already-complete months. "
+            "If interrupted mid-month, only missing timestamps are appended."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from",
+        type=str,
+        default=None,
+        help=(
+            "Optional first month to process in YYYYMM format (e.g. 201208). "
+            "Useful to force resume from a known interruption month."
+        ),
+    )
     args = parser.parse_args()
-    prepare_years(args.years, output_path=args.output_file)
+
+    if args.resume_from is not None and not re.fullmatch(r"\d{6}", args.resume_from):
+        raise ValueError("--resume-from must be in YYYYMM format")
+
+    prepare_years(
+        args.years,
+        output_path=args.output_file,
+        resume=args.resume,
+        resume_from=args.resume_from,
+    )
 
 
 if __name__ == "__main__":
